@@ -67,11 +67,15 @@ std::vector<int> adc_pins = {A9, A7, A3};
 const uint8_t sens_n = adc_pins.size();
 
 // sample valiable
-const uint_least16_t threshold = 2400;
+const uint_least16_t average_n = 100;
+const uint_least16_t threshold = 240;
 const uint_least16_t sample_n = 9600;
-const uint_least16_t preRize_sample_n = 1000;
+const uint_least16_t preRize_sample_n = 5000;
 const uint_least16_t postRize_sample_n = sample_n - preRize_sample_n;
 std::vector<CircularBuffer<uint_least16_t, sample_n>> buffer(sens_n);
+
+// initialize average
+std::vector<uint_least16_t> init_average(3, 0);
 
 // measurement ON or OFF switch
 const uint8_t sw = 8;
@@ -577,12 +581,15 @@ void loop()
 			int count = 0;
 			bool start = false;
 			bool start_sw = false;
+			bool init_ave = false;
 			String file_name = folder_struct.at(folder_i) + "/" + String(file_i + file_init_number.at(folder_i)) + ".csv";
 
 			// label CSV
 			openFile(&file, label_csv_name.c_str());
 			saveData(&file, "." + file_name + "," + String(folder_i), true);
 			closeFile(&file);
+
+			
 
 			do
 			{
@@ -599,11 +606,29 @@ void loop()
 						{
 							digitalWrite(LED_BUILTIN, HIGH);
 							start_sw = start_sw==true ? true : !digitalRead(sw);
-							if (start_sw == true && sensor_val > threshold)
+							
+							if (start_sw == true && init_ave == false)
+							{
+								init_ave = true;
+								for(int i = 0; i < sens_n; i++)
+								{
+									int sensor_sum = 0;
+									for(int j = 0; j < average_n; j++)
+									{
+										sensor_sum += adc->analogRead(adc_pins[i]);
+									}
+									init_average.at(i) = sensor_sum / average_n;
+									cout << init_average.at(i) << " ";
+								}
+								cout << endl;
+							}
+
+							if(start_sw == true && abs(init_average.at(i)-sensor_val) > threshold)
 							{
 								start = true;
+								init_ave = false;
 								digitalWrite(LED_BUILTIN, LOW);
-								cout << "RISE Detection!!" << endl;
+								cout << "RISE Detection!!" << sensor_val - init_average.at(i) << endl;
 								measure_time = 0;
 							}
 						}
